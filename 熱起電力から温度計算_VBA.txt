@@ -1,0 +1,128 @@
+Option Explicit
+
+  ' カラム A : AD値 = 0～4095 (12bit A/Dコンバータ)
+  ' カラム B : 測定電圧(熱起電力)  E[mV]=(12.6/2048)*AD値-12.6 [mV]
+  ' カラム C : 熱起電力から多項式近似で計算した温度 T_tc [℃]
+  ' カラム D :　T_tc の16進数表現 (Memory tableへ入れるデータ)
+  
+  ' ADコンバータ:
+  '  PGA Gain=32 mode 5b ,Vref = 1.62[V]( Vref/2 = 0.81[V] )
+  '  入力電圧範囲: - 0.81/32 ～ 0.81/32 [V] ,-25.3[mV]～25.3[mV]
+  '
+  '  熱電対: Kタイプ
+  '
+  ' 多項式近似の係数は0～500[℃]用
+  ' このため計算で得られた温度が0℃以下の場合、0℃
+  '  500℃以上の場合は500℃とする。
+
+Private Sub CommandButton1_Click()
+
+  Dim i
+  Dim ad_vref_d2
+  Dim gain
+  Dim v_max
+  Dim v_in
+  Dim v_in_u
+  
+  Dim cal_temp
+  Dim temp_val
+  
+  Dim hex_str
+  
+  
+  Worksheets("table").Activate
+   
+   For i = 0 To 4095
+      Cells(i + 2, "A") = ""  'カラム Aクリア
+      Cells(i + 2, "B") = ""  'カラム Bクリア
+      Cells(i + 2, "C") = ""  'カラム Cクリア
+      Cells(i + 2, "D") = ""  'カラム Dクリア
+      
+   Next
+   
+   ad_vref_d2 = 1.62 / 2    ' ADコンバータ Vref/2 [V]
+   gain = 32
+   
+   v_max = (ad_vref_d2 / gain) * 1000    '入力電圧 max [mV]
+     
+   For i = 0 To 4095
+   
+     Cells(i + 2, "A") = i      'AD値(1～4095)をカラム Aに表示
+     
+     v_in = (v_max / 2048) * i - v_max ' 測定電圧
+     
+     Cells(i + 2, "B") = v_in    '入力電圧をカラム Bに表示[mV]
+     
+     v_in_u = v_in * 1000         ' [uV]
+     
+     If v_in >= 0 Then      ' 0[mV](=0[℃])以上の場合に計算 (定数は、0～500[℃]用)
+     
+         cal_temp = cal_temp_k_type(v_in_u) '温度計算
+        
+         If cal_temp > 500 Then  '500℃を超える場合 500℃とする
+           cal_temp = 500
+         End If
+        
+        temp_val = Round(cal_temp)   '整数化
+      Else
+         temp_val = 0
+      End If
+      
+      
+      Cells(i + 2, "C") = temp_val      '計算した温度(整数)
+      hex_str = "0000" + Hex(temp_val)
+       
+    Cells(i + 2, "D") = "0x" + Right(hex_str, 4) ' 温度 の16進数
+     
+   Next
+   
+End Sub
+
+
+
+ 
+' 熱起電力から温度を計算 　(熱電対: K-type使用 )
+'   入力: 熱起電力[ uV ] (v_thermo)
+'   出力: 温度[℃]
+'  　定数は、0～500[℃]用
+'
+'
+Function cal_temp_k_type(ByVal v_thermo As Double) As Single
+
+    Dim i
+    
+    Dim d(9) As Single
+    
+    Dim d_sigma As Single
+    
+    
+    d(0) = 0
+    d(1) = 2.508355 * WorksheetFunction.Power(10, -2)
+    d(2) = 7.860106 * WorksheetFunction.Power(10, -8)
+    d(3) = -2.503131 * WorksheetFunction.Power(10, -10)
+    d(4) = 8.31527 * WorksheetFunction.Power(10, -14)
+    
+    d(5) = -1.228034 * WorksheetFunction.Power(10, -17)
+    d(6) = 9.804036 * WorksheetFunction.Power(10, -22)
+    d(7) = -4.41303 * WorksheetFunction.Power(10, -26)
+    d(8) = 1.057734 * WorksheetFunction.Power(10, -30)
+    d(9) = -1.052755 * WorksheetFunction.Power(10, -35)
+    
+    
+    d_sigma = d(0)
+    
+     For i = 1 To 9
+   
+       d_sigma = d_sigma + d(i) * WorksheetFunction.Power(v_thermo, i)
+     
+     Next
+        
+    
+    cal_temp_k_type = d_sigma     '　戻り値
+    
+
+End Function
+ 
+ 
+
+
